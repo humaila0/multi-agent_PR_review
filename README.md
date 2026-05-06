@@ -1,153 +1,205 @@
-# 🤖 Multi-Agent PR Review
+# 🤖 AI PR Review Agent
 
-**Automated, multi-perspective code review for GitHub Pull Requests using OpenAI and LangGraph.**
-
----
-
-## 🚀 Overview
-
-This project provides an **AI-powered GitHub Pull Request review agent** that analyzes code changes from Security, Performance, and Maintainability perspectives, then posts an actionable review comment on the PR.
+An automated Pull Request reviewer that uses LangGraph multi-agent system to catch bugs, security vulnerabilities, performance issues, and breaking changes — on every PR, automatically.
 
 ---
 
-## 🗺️ Architecture & Flow Diagram
+## 🚀 Features
+
+- **Automatic reviews** on every Pull Request via GitHub Webhooks
+- **Cross-file awareness** — detects breaking changes across related files
+- **Multi-agent system** — specialist agents for Security, Performance, and Maintainability
+- **Smart triage** — only runs relevant agents, saving 60-84% tokens
+- **Token usage tracking** — logged per agent in every PR comment
+- **Production ready** — handles large PRs, filters irrelevant files, truncates safely
+
+---
+
+## 🏗️ Architecture
 
 ```
-[GitHub Pull Request Event]
-           |
-           v
-[ FastAPI Web Server (main.py) ]
-           |
-           v
- [Verify Webhook Signature]
-           |
-           v
- [ agent.py ]
-   |    |     |
-   |    |     |
-   |    |     |
-[Security][Performance][Maintainability] Agents
-           |
-           v
-    [Judge Agent]
-           |
-           v
- [Post Review as PR Comment on GitHub]
+Developer opens PR
+        ↓
+GitHub Webhook → FastAPI Backend
+        ↓
+Phase 1: Fetch PR Diff
+        ↓
+Phase 2: Repo Context Search (related files)
+        ↓
+Phase 3: LangGraph Multi-Agent Review
+   ┌─────────────────────────────┐
+   │  Triage Agent               │ ← detects issue type
+   │    ↓                        │
+   │  Security Agent    🔒       │ ← only if needed
+   │    ↓                        │
+   │  Performance Agent ⚡       │ ← only if needed
+   │    ↓                        │
+   │  Maintainability   🔧       │ ← only if needed
+   │    ↓                        │
+   │  Judge Agent       ⚖️       │ ← combines all reviews
+   └─────────────────────────────┘
+        ↓
+AI Comment Posted on PR
 ```
-
-**How it works:**
-- GitHub sends a webhook when a pull request is opened or updated.
-- FastAPI receives the event and verifies it.
-- The main agent fetches the PR diff and related files.
-- Security, Performance, and Maintainability agents review the changes.
-- The Judge Agent merges these results and posts a formatted review as a PR comment.
 
 ---
 
-## ⚙️ Setup & Usage
+## 📋 What It Detects
 
-### 1. Install dependencies
+| Category | Examples |
+|---|---|
+| **Security** | SQL injection, hardcoded secrets, missing auth |
+| **Performance** | N+1 queries, missing caching, blocking operations |
+| **Maintainability** | Breaking changes, duplicate code, missing tests |
+| **Cross-file** | Renamed variables breaking importers |
+
+---
+
+## 🛠️ Tech Stack
+
+- **Backend** — FastAPI + Uvicorn
+- **AI** — OpenAI GPT-4o-mini
+- **Agent Framework** — LangGraph
+- **GitHub** — PyGithub + Webhooks
+- **Tunnel** — Ngrok (development)
+
+---
+
+## ⚙️ Setup
+
+### 1. Clone & Install
 
 ```bash
-git clone https://github.com/humaila0/multi-agent_PR_review.git
-cd multi-agent_PR_review
+git clone https://github.com/your-username/pr-review-agent
+cd pr-review-agent
+python -m venv venv
+venv\Scripts\activate        # Windows
+source venv/bin/activate     # Mac/Linux
 pip install -r requirements.txt
 ```
 
-### 2. Configure environment variables
+### 2. Environment Variables
 
-Create a `.env` file in the project root containing:
+Create a `.env` file:
+
 ```env
-GITHUB_TOKEN=your_github_token
-OPENAI_API_KEY=your_openai_key
-GITHUB_WEBHOOK_SECRET=your_webhook_secret
+GITHUB_TOKEN=ghp_xxxxxxxxxxxx
+GITHUB_WEBHOOK_SECRET=your_secret_here
+OPENAI_API_KEY=sk-xxxxxxxxxxxx
 ```
 
-- `GITHUB_TOKEN`: GitHub token with permission to comment on PRs.
-- `OPENAI_API_KEY`: Your OpenAI API key for LLM-based analysis.
-- `GITHUB_WEBHOOK_SECRET`: Any string, must match your GitHub webhook setting.
+| Variable | How to get |
+|---|---|
+| `GITHUB_TOKEN` | GitHub → Settings → Developer Settings → Personal Access Tokens |
+| `GITHUB_WEBHOOK_SECRET` | Any random string you choose |
+| `OPENAI_API_KEY` | platform.openai.com → API Keys |
 
-### 3. Start the server
+### 3. Run the Server
 
 ```bash
 uvicorn main:app --reload
 ```
 
-- Webhook endpoint: `POST /webhooks/github`
-- Health check: `GET /`
+### 4. Expose with Ngrok
 
-### 4. Set up GitHub webhook
-
-- Webhook URL: `http://<your-server>/webhooks/github`
-- Content-Type: `application/json`
-- Secret: Use `GITHUB_WEBHOOK_SECRET`
-- Events: “Pull requests” (opened, synchronize)
-
----
-
-## 📋 Example Review Output
-
-```markdown
-## 🤖 AI Code Review
-
-### Summary
-- Security and performance look strong.
-- Minor maintainability risks identified in test coverage.
-
-### Issues
-- Severity: Medium
-- File: agent.py
-- Problem: Test coverage for new logic may be missing.
-- Why it matters: Ensures reliability and prevents regressions.
-- Suggestion: Add/augment relevant tests.
-
-### Test Gaps
-- Some modified functions may not be directly tested.
-
-### Verdict
-⚠️ Minor Issues
-
----
-
-_Auto-generated by AI PR Review Agent (Phase 3 — Multi-Agent)_
+```bash
+.\ngrok.exe http 8000
 ```
+
+Copy the `https://xxx.ngrok-free.app` URL.
+
+### 5. Add GitHub Webhook
+
+Go to your repo → **Settings → Webhooks → Add webhook**
+
+| Field | Value |
+|---|---|
+| Payload URL | `https://xxx.ngrok-free.app/webhooks/github` |
+| Content type | `application/json` |
+| Secret | Same as `GITHUB_WEBHOOK_SECRET` |
+| Events | Pull requests only |
 
 ---
 
 ## 📁 Project Structure
 
-- `agent.py` — Main multi-agent review logic.
-- `main.py` — FastAPI server/webhook handler.
-- `requirements.txt` — Python dependencies.
-- `.env` — Secrets & API keys (not committed).
+```
+pr-review-agent/
+├── main.py          # FastAPI webhook server
+├── agent.py         # Core agent logic (all 3 phases)
+├── .env             # Secret keys (never commit!)
+├── requirements.txt
+└── ngrok.exe
+```
 
 ---
 
-## 📦 Requirements
+## 🧪 Test Cases
 
-- Python 3.8+
-- PyGithub
-- FastAPI
-- LangGraph, LangChain, python-dotenv
-- Uvicorn (for serving the API)
-
----
-
-## 🛡️ Limitations
-
-- Reviews only what’s visible in the PR diff (does not build/run code).
-- LLM-based analysis is limited by API quotas and accuracy of the context window.
-- Code and comments only—does not understand external infrastructure or configs beyond the repo.
+| Test | Change | Expected |
+|---|---|---|
+| TC1 — Config Break | `API_TIMEOUT` → `REQUEST_TIMEOUT` | ❌ Needs Changes |
+| TC2 — Hardcoded Secret | `SECRET_KEY = "abc123"` | ❌ Needs Changes |
+| TC3 — SQL Injection | String concat in query | ❌ Needs Changes |
+| TC4 — N+1 Query | DB call inside loop | ❌ Needs Changes |
+| TC5 — Duplicate Code | Same function twice | ⚠️ Minor Issues |
+| TC6 — Safe PR | README update | ✅ Looks Good |
 
 ---
 
-## 🤝 Contributions
+## 📊 Token Efficiency
 
-PRs and issues for improvements or new reviewing criteria are welcome!
+| Setup | Tokens per PR | Cost |
+|---|---|---|
+| Phase 2 (single agent) | ~2000 | $$ |
+| Phase 3 (all 4 agents) | ~4600 | $$$$ |
+| Phase 3 (with triage) | ~500-750 | ¢ |
+
+Optimizations implemented:
+- `compress_diff()` — removes unchanged lines (~70% saving)
+- Triage Agent — skips unnecessary specialist agents
+- Context filtering — only relevant files sent to LLM
+- Per-agent token limits
+- Judge gets compact input only
 
 ---
 
-## 👤 Maintainer
+## 💬 Sample PR Comment
 
-**humaila0**
+```
+🤖 AI Code Review
 
+### Summary
+- API_TIMEOUT renamed to REQUEST_TIMEOUT in config.py
+- client.py still imports old name — will cause NameError
+
+### Issues
+- Severity: High
+- File: client.py
+- Problem: Outdated import
+- Why it matters: ImportError at runtime
+- Suggestion: Update to REQUEST_TIMEOUT
+
+### Test Gaps
+- No tests cover this config change
+
+### Verdict
+❌ Needs Changes
+
+### Token Usage
+- Total tokens: 750
+```
+
+---
+
+## 🔮 Phases
+
+- ✅ **Phase 1** — Single agent, PR diff → LLM → Review
+- ✅ **Phase 2** — Context retrieval, Repo search → LLM Review
+- ✅ **Phase 3** — Multi-agent system with LangGraph + Triage
+
+---
+
+## 📄 License
+
+MIT
